@@ -37,33 +37,38 @@ int main(int argc, char **argv)
   ros::Subscriber sub = n.subscribe("scan", 1000, con_fusion);
 /**
  *  Accepting all the Parameters to be used by this node
+ *  DEBUG PROBLEM: Parameters are not being input properly
  */
-  if(n.getParam("min_obstacle_rad",min_obstacle_rad))
+  if(ros::param::get("min_obstacle_rad",min_obstacle_rad))
   {
 	ROS_ERROR("Please specify the minimum threshold for obstacle radius!\nExiting....");
 	return -1;	
   }
-  if(n.getParam("max_obstacle_rad",max_obstacle_rad))
+  if(ros::param::get("max_obstacle_rad",max_obstacle_rad))
   {
 	ROS_ERROR("Please specify the maximum threshold for obstacle radius!\nExiting....");
 	return -1;
   }
-  if(n.getParam("scan_threshold",threshold))
+  if(ros::param::get("scan_threshold",threshold))
   {	
 	ROS_WARN("No minimum scan points threshold for obstacle detection specified.\nUsing default value!");
 	threshold=100;
   }
-  if(n.getParam("inflation_factor",inflation))
+  if(ros::param::get("inflation_factor",inflation))
   {
 	ROS_WARN("Inflation factor for obstacles not defined.\nUsing default value!");
-	inflation=1;	
+	inflation=1.0;	
   }
 /**
  * Error Handling!
  */
+  //Omit after fixing parameters input
+  min_obstacle_rad=0.6;
+  max_obstacle_rad=0.9;
+  //
   if(min_obstacle_rad>=max_obstacle_rad)
   {
-	ROS_ERROR("Minimum Obstacle Radius cannot be greater than Maximum Obstacle Radius.\nExiting....");
+	ROS_ERROR("Minimum Obstacle Radius(%g) cannot be greater than Maximum Obstacle Radius(%g).\nExiting....",min_obstacle_rad,max_obstacle_rad);
 	return -1;
   }
 /**
@@ -77,6 +82,7 @@ int main(int argc, char **argv)
 		ros::spinOnce();
 		continue;
 	}
+	acc=cv::Mat::zeros(2241,2241,CV_8UC1);
 	for(theta=scan.angle_min;theta<=scan.angle_max;theta+=scan.angle_increment)
 	{
 	idx=cvRound((theta-scan.angle_min)/scan.angle_increment);
@@ -84,18 +90,17 @@ int main(int argc, char **argv)
 	cv::Point center(cvRound(1120.0+(r*sin(theta)*1120.0/56.0)),cvRound(1120.0-(r*cos(theta)*1120.0/56.0)));
 	circle(mask,center,cvRound(min_obstacle_rad*1120.0/56.0),cv::Scalar(1),cvRound((max_obstacle_rad-min_obstacle_rad)*1120.0/56.0),8,0);
 	acc=acc+mask;
-	//cv::imshow("Obstacle Detection DEBUG 1",mask);
 	mask=cv::Mat::zeros(2241,2241,CV_8UC1);
 	}
 /**
  * DEBUG TEST 1: Displaying the Accumulator Matrix as an Image and comparing it with Scan Data by running on a .bag file
- */
-        cout<<idx<<endl;
-	cv::imshow("Obstacle Detection DEBUG 1",acc);
-	cv::waitKey(100);
-/**
- * DEBUG TEST 1 STATUS: Output not as expected (Failure)
- *             PROBLEM: Accumulator Matrix shows a zero matrix
+ *
+ *      cout<<idx<<endl;
+ *	cv::imshow("Obstacle Detection DEBUG 1",acc);
+ *	cv::waitKey(100);
+ *
+ * DEBUG TEST 1 RESULT: Expected Output obtained after certain modifications
+ *              STATUS: Unable to obtain parameters
  */	
 	scan_rec=false;
   }
