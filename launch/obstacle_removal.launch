@@ -1,12 +1,8 @@
 <launch>
 	<node name="obstacle_detection" pkg="obstacle_removal" type="obstacle_detection_debug" >
-		<param name="min_obstacle_rad" value="0.6" type="double" />
+		<param name="min_obstacle_rad" value="0.6" />
 		<param name="max_obstacle_rad" value="0.9" type="double" />
-		
-		<!--
-		<param name="scan_threshold" value="100" type="int" />
+		<param name="scan_threshold" value="300" type="int" />
 		<param name="inflation_factor" value="1" type="double" />
-		-->
-
 	</node>
 </launch>
