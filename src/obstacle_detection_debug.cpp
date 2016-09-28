@@ -9,6 +9,8 @@
 #include <math.h>
 #include "string"
 #include "deque"
+#include "iostream"
+#include "fstream"
 
 #define Pixel(M,x,y,c) *(M.data+M.step[0]*x+M.step[1]*y+c)
 /**
@@ -16,6 +18,7 @@
  */
 sensor_msgs::LaserScan scan;
 bool scan_rec=false;
+cv::Mat inputImg;
 
 using namespace std;
 
@@ -23,6 +26,18 @@ void con_fusion(const sensor_msgs::LaserScan::ConstPtr& rec_scan)
 {
   scan=*rec_scan;
   scan_rec=true;
+}
+
+void getImg(const sensor_msgs::ImageConstPtr& msg)
+{
+    try {
+        cv_bridge::CvImagePtr bridge;
+        bridge = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+        inputImg = bridge->image;
+        cv::waitKey(10);
+    } catch (cv_bridge::Exception& e) {
+        ROS_ERROR("Error in converting image");
+    }
 }
 
 int main(int argc, char **argv)
@@ -35,7 +50,7 @@ int main(int argc, char **argv)
   double min_obstacle_rad,max_obstacle_rad,inflation,theta,r,x_c,y_c,r_c,range;
   vector<cv::Vec3f> circles;
   deque<cv::Mat> accs;
-  cv::Mat mask=cv::Mat::zeros(1121,2241,CV_8UC1),acc;
+  cv::Mat mask=cv::Mat::zeros(1121,2241,CV_16SC1),acc;
   cv::Point center;
   string node_name;
 /**
@@ -45,6 +60,8 @@ int main(int argc, char **argv)
   ros::NodeHandle n;
   ros::Subscriber sub = n.subscribe("scan", 1000, con_fusion);
   node_name=ros::this_node::getName();
+  image_transport::ImageTransport image_transport(node);
+  image_subscriber = image_transport.subscribe("/sensors/camera/1", 2, getImg);
 /**
  *  Accepting all the Parameters to be used by this node
  */
@@ -73,10 +90,10 @@ int main(int argc, char **argv)
 	ROS_WARN("No. of scans to combine for obstacle detection not defined.\nUsing default value!");
 	nscans=5;	
   }
-  if(!ros::param::get(node_name+"/max_detect_range",nscans))
+  if(!ros::param::get(node_name+"/max_detect_range",range))
   {
 	ROS_WARN("Maximum range for obstacle detection not defined.\nUsing default value!");
-	range=range;	
+	range=25.0;	
   }
 /**
  * Error Handling!
@@ -97,7 +114,7 @@ int main(int argc, char **argv)
 		ros::spinOnce();
 		continue;
 	}
-	acc=cv::Mat::zeros(1121,2241,CV_8UC1);
+	acc=cv::Mat::zeros(1121,2241,CV_16SC1);
 	for(theta=-1.570796327;theta<=1.570796327;theta+=scan.angle_increment)
 	{
 		idx=cvRound((theta-scan.angle_min)/scan.angle_increment);
@@ -107,7 +124,7 @@ int main(int argc, char **argv)
 		center= cv::Point(cvRound(1120.0+(r*sin(theta)*1120.0/range)),cvRound(1120.0-(r*cos(theta)*1120.0/range)));
 		cv::circle(mask,center,cvRound(min_obstacle_rad*1120.0/range),cv::Scalar(1),cvRound((max_obstacle_rad-min_obstacle_rad)*1120.0/range),8,0);
 		acc=acc+mask;
-		mask=cv::Mat::zeros(1121,2241,CV_8UC1);
+		mask=cv::Mat::zeros(1121,2241,CV_16SC1);
 	}
 	
 	if(accs.size()>=nscans)
@@ -117,7 +134,7 @@ int main(int argc, char **argv)
 	accs.push_back(acc);
 /**
  * DEBUG TEST 1: Displaying the Accumulator Matrix as an Image and comparing it with Scan Data by running on a .bag file
- *
+ */
 	if(accs.size()>=nscans)
 	{
 		cv::imshow("Obstacle Detection DEBUG 1",acc);
@@ -182,7 +199,7 @@ int main(int argc, char **argv)
 	if(accs.size()>=nscans)
 	{
 		cv::imshow("Obstacle Detection DEBUG 1",debug);
- 		cv::waitKey(0);
+ 		cv::waitKey(10);
 	}
 /**
  * DEBUG TEST 3 STATUS: Compiled Successfully
