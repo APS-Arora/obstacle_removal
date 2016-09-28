@@ -6,6 +6,7 @@
 #include <tf/transform_broadcaster.h>
 #include <pthread.h>
 #include <image_transport/image_transport.h>
+#include <tf/transform_listener.h>
 #include "math"
 #include "iostream"
 #include "fstream"
@@ -79,7 +80,7 @@ int main(int argc, char** argv){
 	switch(done)
 	{
 	  case 1:
-		drawCrossHair(inputImg,Point(inputImg.cols*3/8,inputImg.rows/2));
+		drawCrossHair(inputImg,Point(inputImg.cols*5/8,inputImg.rows/2));
 		break;
 	  case 2:
 		drawCrossHair(inputImg,Point(inputImg.cols/2,inputImg.rows*5/8));

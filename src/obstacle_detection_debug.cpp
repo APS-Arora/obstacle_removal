@@ -47,12 +47,15 @@ int main(int argc, char **argv)
  */
   uchar intensity;
   int idx, threshold,i,j,k,l,sum_i,sum_xi,sum_yi,*count,nscans;  
-  double min_obstacle_rad,max_obstacle_rad,inflation,theta,r,x_c,y_c,r_c,range;
+  double min_obstacle_rad,max_obstacle_rad,inflation,theta,r,x_c,y_c,r_c,range,focal_length,obs_height,lidar_height;
   vector<cv::Vec3f> circles;
   deque<cv::Mat> accs;
-  cv::Mat mask=cv::Mat::zeros(1121,2241,CV_16SC1),acc;
+  deque<tf::Vector3> transformed_pts;
+  cv::Mat mask=cv::Mat::zeros(1121,2241,CV_16UC1),acc;
   cv::Point center;
   string node_name;
+  ifstream new_pt_data;
+  tf::Vector3 pt_point(0,0,0);
 /**
  * ROS initialisations
  */
@@ -62,6 +65,24 @@ int main(int argc, char **argv)
   node_name=ros::this_node::getName();
   image_transport::ImageTransport image_transport(node);
   image_subscriber = image_transport.subscribe("/sensors/camera/1", 2, getImg);
+  tf::TransformListener listener;
+/**
+ * Setting up the transforms!!!
+ */
+  new_pt_data.open(ros::package::getPath("obstacle_removal")+"/data/new_pt.dat");
+  new_pt_data>>>>>>>>pt_point.x()>>pt_point.y()>>pt_point.z();
+  try
+  {
+	listener.lookupTransform("/laser","/image", ros::Time(0), transform);
+  }
+  catch (tf::TransformException &ex) 
+  {
+	ROS_ERROR("%s",ex.what());
+	ros::Duration(1.0).sleep();
+	continue;
+  }
+  pt_point=transform(pt_point);
+  focal_length=inputImg.rows*pt_point.z()/(8*pt_point.y());
 /**
  *  Accepting all the Parameters to be used by this node
  */
@@ -73,6 +94,16 @@ int main(int argc, char **argv)
   if(!ros::param::get(node_name+"/max_obstacle_rad",max_obstacle_rad))
   {
 	ROS_ERROR("Please specify the maximum threshold for obstacle radius!\nExiting....");
+	return -1;
+  }
+  if(!ros::param::get(node_name+"/obstacle_height",obs_height)
+  {
+	ROS_ERROR("Please specify the cylindrical obstacle height!\nExiting....");
+	return -1;
+  }
+  if(!ros::param::get(node_name+"/lidar_height",lidar_height)
+  {
+	ROS_ERROR("Please specify the height of lidar above the ground!\nExiting....");
 	return -1;
   }
   if(!ros::param::get(node_name+"/scan_threshold",threshold))
@@ -106,7 +137,7 @@ int main(int argc, char **argv)
 /**
  * Code begins here!
  */
-  cv::namedWindow("Obstacle Detection DEBUG 1",CV_WINDOW_NORMAL);
+  cv::namedWindow("Obstacle Removal DEBUG",CV_WINDOW_NORMAL);
   while(ros::ok())
   {
 	if(!scan_rec)
@@ -114,7 +145,7 @@ int main(int argc, char **argv)
 		ros::spinOnce();
 		continue;
 	}
-	acc=cv::Mat::zeros(1121,2241,CV_16SC1);
+	acc=cv::Mat::zeros(1121,2241,CV_16UC1);
 	for(theta=-1.570796327;theta<=1.570796327;theta+=scan.angle_increment)
 	{
 		idx=cvRound((theta-scan.angle_min)/scan.angle_increment);
@@ -124,7 +155,7 @@ int main(int argc, char **argv)
 		center= cv::Point(cvRound(1120.0+(r*sin(theta)*1120.0/range)),cvRound(1120.0-(r*cos(theta)*1120.0/range)));
 		cv::circle(mask,center,cvRound(min_obstacle_rad*1120.0/range),cv::Scalar(1),cvRound((max_obstacle_rad-min_obstacle_rad)*1120.0/range),8,0);
 		acc=acc+mask;
-		mask=cv::Mat::zeros(1121,2241,CV_16SC1);
+		mask=cv::Mat::zeros(1121,2241,CV_16UC1);
 	}
 	
 	if(accs.size()>=nscans)
@@ -135,11 +166,18 @@ int main(int argc, char **argv)
 /**
  * DEBUG TEST 1: Displaying the Accumulator Matrix as an Image and comparing it with Scan Data by running on a .bag file
  */
+ 	ofstream debug_test1_file;
+ 	debug_test1_file.open(ros::package::getPath("obstacle_removal")+"/data/debug_test1.dat");
+ 	debug_test1_file<<'[';
 	if(accs.size()>=nscans)
 	{
-		cv::imshow("Obstacle Detection DEBUG 1",acc);
+		for(i=0;i<1121;i++)
+	  	  for(j=0;j<2241;j++)
+	  	    debug_test1_file<<acc.at<uchar>(i,j)<<',';
+		cv::imshow("Obstacle Removal DEBUG",acc);
  		cv::waitKey(0);
 	}
+	debug_test1_file<<"\b]";
 /**
  * DEBUG TEST 1 RESULT: Expected Output obtained after certain modifications
  *              STATUS: Unable to obtain parameters
@@ -188,7 +226,7 @@ int main(int argc, char **argv)
 	  circles[i][2]/=count[i];
 /**
  * DEBUG TEST 3: Analysis of No. of scan points giving a particular center and comparing the obtained radius with Accumulator data
- */
+ *
 	cv::Mat debug=cv::Mat::zeros(1121,2241,CV_8UC3);
 	cv::Point deb_cent;
 	for(i=0;i<circles.size();i++)
@@ -198,12 +236,30 @@ int main(int argc, char **argv)
 	}
 	if(accs.size()>=nscans)
 	{
-		cv::imshow("Obstacle Detection DEBUG 1",debug);
+		cv::imshow("Obstacle Removal DEBUG",debug);
  		cv::waitKey(10);
 	}
 /**
  * DEBUG TEST 3 STATUS: Compiled Successfully
  */
+	for(i=0;i<circles.size();i++)
+	{
+		transformed_pts.push_back(transform(Vector3(circles[i][0]+circles[i][2],circles[i][1],-lidar_height)));
+		transformed_pts.push_back(transform(Vector3(circles[i][0]+circles[i][2],circles[i][1],obs_height-lidar_height)));
+		for(theta=0;theta<=6.285185307;theta+=0.00628518307)
+		{
+			transformed_pts.push_back(transform(Vector3(circles[i][0]+circles[i][2]*cos(theta),circles[i][1]+circles[i][2]*sin(theta),-lidar_height)));
+			transformed_pts.push_back(transform(Vector3(circles[i][0]+circles[i][2]*cos(theta),circles[i][1]+circles[i][2]*sin(theta),obs_height-lidar_height)));
+			for(j=0;j<4;j++)
+			  transformed_pts[j]*=focal_length/transformed_pts[j].z();
+			cv::rectangle(inputImg,cv::Point(transformed_pts[0].x()+inputImg.cols/2,transformed_pts[0].y()+inputImg.rows/2),cv::Point(transformed_pts[3].x()+inputImg.cols/2,transformed_pts[3].y()+inputImg.rows/2),Scalar(0,0,255),-1);
+			transformed_pts.pop_front();
+			transformed_pts.pop_front();	
+		}
+		transformed_pts.clear();
+	}
+	cv::imshow("Obstacle Removal DEBUG",inputImg);
+ 	cv::waitKey(10);
 	scan_rec=false;
   }
   return 0;
