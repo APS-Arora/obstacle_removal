@@ -11,6 +11,12 @@
 #include "deque"
 #include "iostream"
 #include "fstream"
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
+#include <ros/package.h>
+#include <image_transport/image_transport.h>
+#include <tf/transform_listener.h>
 
 #define Pixel(M,x,y,c) *(M.data+M.step[0]*x+M.step[1]*y+c)
 /**
@@ -55,6 +61,7 @@ int main(int argc, char **argv)
   cv::Point center;
   string node_name;
   ifstream new_pt_data;
+  string new_pt_data_path=ros::package::getPath("obstacle_removal")+"/data/new_pt.dat";
   tf::Vector3 pt_point(0,0,0);
 /**
  * ROS initialisations
@@ -63,14 +70,18 @@ int main(int argc, char **argv)
   ros::NodeHandle n;
   ros::Subscriber sub = n.subscribe("scan", 1000, con_fusion);
   node_name=ros::this_node::getName();
-  image_transport::ImageTransport image_transport(node);
-  image_subscriber = image_transport.subscribe("/sensors/camera/1", 2, getImg);
+  image_transport::ImageTransport image_transport(n);
+  image_transport::Subscriber image_subscriber = image_transport.subscribe("/sensors/camera/1", 2, getImg);
   tf::TransformListener listener;
+  tf::StampedTransform transform;
 /**
  * Setting up the transforms!!!
  */
-  new_pt_data.open(ros::package::getPath("obstacle_removal")+"/data/new_pt.dat");
-  new_pt_data>>>>>>>>pt_point.x()>>pt_point.y()>>pt_point.z();
+  new_pt_data.open(new_pt_data_path.c_str());
+  new_pt_data>>x_c>>x_c>>x_c>>x_c>>y_c>>r_c;
+  pt_point.setX(x_c);
+  pt_point.setY(y_c);
+  pt_point.setZ(r_c);
   try
   {
 	listener.lookupTransform("/laser","/image", ros::Time(0), transform);
@@ -79,7 +90,6 @@ int main(int argc, char **argv)
   {
 	ROS_ERROR("%s",ex.what());
 	ros::Duration(1.0).sleep();
-	continue;
   }
   pt_point=transform(pt_point);
   focal_length=inputImg.rows*pt_point.z()/(8*pt_point.y());
@@ -96,12 +106,12 @@ int main(int argc, char **argv)
 	ROS_ERROR("Please specify the maximum threshold for obstacle radius!\nExiting....");
 	return -1;
   }
-  if(!ros::param::get(node_name+"/obstacle_height",obs_height)
+  if(!ros::param::get(node_name+"/obstacle_height",obs_height))
   {
 	ROS_ERROR("Please specify the cylindrical obstacle height!\nExiting....");
 	return -1;
   }
-  if(!ros::param::get(node_name+"/lidar_height",lidar_height)
+  if(!ros::param::get(node_name+"/lidar_height",lidar_height))
   {
 	ROS_ERROR("Please specify the height of lidar above the ground!\nExiting....");
 	return -1;
@@ -167,7 +177,8 @@ int main(int argc, char **argv)
  * DEBUG TEST 1: Displaying the Accumulator Matrix as an Image and comparing it with Scan Data by running on a .bag file
  */
  	ofstream debug_test1_file;
- 	debug_test1_file.open(ros::package::getPath("obstacle_removal")+"/data/debug_test1.dat");
+ 	string debug_test1_file_path=ros::package::getPath("obstacle_removal")+"/data/debug_test1.dat";
+ 	debug_test1_file.open(debug_test1_file_path.c_str());
  	debug_test1_file<<'[';
 	if(accs.size()>=nscans)
 	{
@@ -242,17 +253,27 @@ int main(int argc, char **argv)
 /**
  * DEBUG TEST 3 STATUS: Compiled Successfully
  */
+	try
+	{
+		listener.lookupTransform("/laser","/image", ros::Time(0), transform);
+	}
+	catch (tf::TransformException &ex) 
+	{
+		ROS_ERROR("%s",ex.what());
+		ros::Duration(1.0).sleep();
+		continue;
+  	}
 	for(i=0;i<circles.size();i++)
 	{
-		transformed_pts.push_back(transform(Vector3(circles[i][0]+circles[i][2],circles[i][1],-lidar_height)));
-		transformed_pts.push_back(transform(Vector3(circles[i][0]+circles[i][2],circles[i][1],obs_height-lidar_height)));
+		transformed_pts.push_back(transform(tf::Vector3(circles[i][0]+circles[i][2],circles[i][1],-lidar_height)));
+		transformed_pts.push_back(transform(tf::Vector3(circles[i][0]+circles[i][2],circles[i][1],obs_height-lidar_height)));
 		for(theta=0;theta<=6.285185307;theta+=0.00628518307)
 		{
-			transformed_pts.push_back(transform(Vector3(circles[i][0]+circles[i][2]*cos(theta),circles[i][1]+circles[i][2]*sin(theta),-lidar_height)));
-			transformed_pts.push_back(transform(Vector3(circles[i][0]+circles[i][2]*cos(theta),circles[i][1]+circles[i][2]*sin(theta),obs_height-lidar_height)));
+			transformed_pts.push_back(transform(tf::Vector3(circles[i][0]+circles[i][2]*cos(theta),circles[i][1]+circles[i][2]*sin(theta),-lidar_height)));
+			transformed_pts.push_back(transform(tf::Vector3(circles[i][0]+circles[i][2]*cos(theta),circles[i][1]+circles[i][2]*sin(theta),obs_height-lidar_height)));
 			for(j=0;j<4;j++)
 			  transformed_pts[j]*=focal_length/transformed_pts[j].z();
-			cv::rectangle(inputImg,cv::Point(transformed_pts[0].x()+inputImg.cols/2,transformed_pts[0].y()+inputImg.rows/2),cv::Point(transformed_pts[3].x()+inputImg.cols/2,transformed_pts[3].y()+inputImg.rows/2),Scalar(0,0,255),-1);
+			cv::rectangle(inputImg,cv::Point(transformed_pts[0].x()+inputImg.cols/2,transformed_pts[0].y()+inputImg.rows/2),cv::Point(transformed_pts[3].x()+inputImg.cols/2,transformed_pts[3].y()+inputImg.rows/2),cv::Scalar(0,0,255),-1);
 			transformed_pts.pop_front();
 			transformed_pts.pop_front();	
 		}

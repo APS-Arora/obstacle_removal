@@ -9,10 +9,15 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   sensor_msgs
   std_msgs
+  image_transport
+  roslib
+  cv_bridge
+  tf
 )
 
 ## System dependencies are found with CMake's conventions
 find_package(OpenCV REQUIRED)
+find_package(Threads REQUIRED)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -129,19 +134,23 @@ include_directories(
 # add_dependencies(obstacle_removal ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
-add_executable(obstacle_detection_debug src/obstacle_detection_debug.cpp)
+add_executable(obstacle_removal_debug src/obstacle_removal_debug.cpp)
+add_executable(camera+image_tf_publisher src/camera+image_tf_publisher.cpp)
 #add_executable(obstacle_removal_node src/obstacle_removal_node.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
-add_dependencies(obstacle_detection_debug obstacle_removal_generate_messages_cpp)
-
+add_dependencies(obstacle_removal_debug obstacle_removal_generate_messages_cpp)
+add_dependencies(camera+image_tf_publisher obstacle_removal_generate_messages_cpp)
 ## Specify libraries to link a library or executable target against
-target_link_libraries(obstacle_detection_debug
+target_link_libraries(obstacle_removal_debug
    ${catkin_LIBRARIES}
    ${OpenCV_LIBS}
 )
-
+target_link_libraries(camera+image_tf_publisher
+   ${catkin_LIBRARIES}
+   ${OpenCV_LIBS}
+)
 #############
 ## Install ##
 #############
@@ -186,6 +195,14 @@ target_link_libraries(obstacle_detection_debug
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()
+
+if(THREADS_HAVE_PTHREAD_ARG)
+  set_property(TARGET obstacle_removal_debug PROPERTY COMPILE_OPTIONS "-pthread")
+  set_property(TARGET obstacle_removal_debug PROPERTY INTERFACE_COMPILE_OPTIONS "-pthread")
+endif()
+if(CMAKE_THREAD_LIBS_INIT)
+  target_link_libraries(obstacle_removal_debug "${CMAKE_THREAD_LIBS_INIT}")
+endif()
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)

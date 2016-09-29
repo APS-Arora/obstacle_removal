@@ -5,5 +5,8 @@
 		<param name="scan_threshold" value="100" type="int" />
 		<param name="inflation_factor" value="1" type="double" />
 		<param name="max_detect_range" value="25.0" />
+		<param name="combine_scans" value="5" />
+		<param name="lidar_height" value="0.5" />
+		<param name="obstacle_height" value="1.0" />
 	</node>
 </launch>
